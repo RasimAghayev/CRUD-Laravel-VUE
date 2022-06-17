@@ -1,6 +1,6 @@
 <template>
     <div class="container">
-        <form @subit.prevent="submit">
+        <form @submit.prevent="submit">
             <div>
                 <label for="title">Title</label>
                 <input type="text" v-model="form.title">
@@ -9,10 +9,11 @@
                 <label for="body">Body</label>
                 <input type="text" v-model="form.body">
             </div>
-            <input type="submit" value="Submit">
+            <input v-if="idToUPload===null" type="submit" value="Submit">
+            <input v-else type="submit" value="Submit">
         </form>
         <div>
-            <table>
+            <table v-if="posts">
                 <tr>
                     <th>Title</th>
                     <th>Body</th>
@@ -32,52 +33,62 @@
 </template>
 
 <script>
+const url='http://localhost:8000'
 import axios from 'axios'
     export default {
-        name:'ExampleComponent',
         data:()=>({
-            form:{
+          form:{
                 title:null,
                 body:null
-            },
-            posts:null
+          },
+          posts:null,
+          idToUPload:null
         }),
         methods:{
             submit(){
-                axios.post('http://localhost:8000/api/posts',this.form).then(res=>{
-                    console.log("res from api",res.data)
+              if(this.idToUPload===null){
+                console.log(this.form);
+                axios.post(url+'/api/posts', this.form).then(res=>{
+                  console.log("res form api",res.data)
+                  this.form.title=null
+                  this.form.body=null
+                  this.get()
                 }).catch(err=>{
-                    console.log("error",err.response)
+                  console.log("error",err.response)
                 })
+              }else{
+                this.update_id(this.idToUPload)
+              }
             },
             get(){
-                axios.get('http://localhost:8000/api/posts').then(res=>{
+                axios.get(url+'/api/posts').then(res=>{
                     this.posts=res.data
                 }).catch(err=>{
                     console.log("error",err.response)
                 })
             },
             update_id(id){
-                axios.put('http://localhost:8000/api/posts'+id,this.form).then(res=>{
+                axios.put(url+'/api/posts/'+id, this.form).then(res=>{
                     console.log("update ",res.data)
                 }).catch(err=>{
                     console.log("error",err.response)
                 })
-
             },
             edit_id(id){
-                axios.get('http://localhost:8000/api/posts'+id).then(res=>{
-                    this.from.title=res.data.title
-                    this.from.body=res.data.body
+                axios.get(url+'/api/posts/'+id).then(res=>{
+                  console.log(res)
+                  this.form.title=res.data.title
+                  this.form.body=res.data.body
+                  this.idToUPload=res.data.id
                 }).catch(err=>{
                     console.log("error",err.response)
                 })
-
             },
             delete_id(id){
-                axios.delete('http://localhost:8000/api/posts'+id).then(res=>{
+                axios.delete(url+'/api/posts/'+id).then(res=>{
                     console.log("delete ",res.data)
                     this.get()
+                  this.idToUPload=null
                 }).catch(err=>{
                     console.log("error",err.response)
                 })
@@ -92,3 +103,8 @@ import axios from 'axios'
         }
     }
 </script>
+<style lang="scss" scoped>
+table,tr,th,td{
+  border:1px solid #dde0e3;
+}
+</style>
