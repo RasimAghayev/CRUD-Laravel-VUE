@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Pre-commit secret-scan hook (gitleaks).
+# Scans the staged blob snapshot for secrets. Warns and allows the commit if
+# gitleaks is unavailable (the CI secret-scan job is the backstop).
+set -euo pipefail
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+    if command -v docker >/dev/null 2>&1; then
+        STAGED_DIR="$(mktemp -d)"
+        trap 'rm -rf "${STAGED_DIR}"' EXIT
+        while IFS= read -r -d '' path; do
+            mkdir -p "${STAGED_DIR}/$(dirname "${path}")"
+            git show ":${path}" > "${STAGED_DIR}/${path}" 2>/dev/null || true
+        done < <(git diff --cached --name-only --diff-filter=ACM -z)
+
+        if docker run --rm -i -v "${STAGED_DIR}:/scan" zricethezav/gitleaks:latest \
+            detect --source /scan --no-banner --redact >/dev/null 2>&1; then
+            exit 0
+        fi
+        echo "[pre-commit] gitleaks found potential secrets in staged changes (via Docker image). Commit blocked."
+        rm -rf "${STAGED_DIR}"
+        trap - EXIT
+        exit 1
+    fi
+    echo "[pre-commit] gitleaks not installed and Docker unavailable; skipping secret scan (CI is the backstop)."
+    exit 0
+fi
+
+STAGED_DIR="$(mktemp -d)"
+trap 'rm -rf "${STAGED_DIR}"' EXIT
+
+while IFS= read -r -d '' path; do
+    mkdir -p "${STAGED_DIR}/$(dirname "${path}")"
+    git show ":${path}" > "${STAGED_DIR}/${path}" 2>/dev/null || true
+done < <(git diff --cached --name-only --diff-filter=ACM -z)
+
+if gitleaks detect --source "${STAGED_DIR}" --no-banner --redact >/dev/null 2>&1; then
+    exit 0
+fi
+
+echo "[pre-commit] gitleaks found potential secrets in staged changes. Commit blocked."
+echo "[pre-commit] Review the findings (values redacted) and remove/rotate secrets before committing."
+exit 1
